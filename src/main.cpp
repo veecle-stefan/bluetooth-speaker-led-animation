@@ -12,7 +12,7 @@
 
 #define LEDSX 10
 #define LEDSY 14
-#define ABSPIXEL(x,y) (NUM_LEDS - 1 - (LEDSX * y + x))
+#define ABSPIXEL(x,y) (NUM_LEDS - 1 - (LEDSX * y + (x+dispRotation)%LEDSX))
 #define DISPLAY_FPS 25
 #define AMP_FACTOR ((255 / LEDSY)+1)
 
@@ -24,6 +24,9 @@ bool buffComplete = false;
 uint8_t sumFreq[FREQ_SUM_N];
 uint8_t lastFreq[FREQ_SUM_N];
 uint32_t lastUpdate = 0;
+
+uint8_t rotationCounter = 0;
+uint8_t dispRotation = 0;
 
 void setup() {
   // put your setup code here, to run once:
@@ -112,6 +115,10 @@ inline uint32_t composeCol(uint32_t r, uint32_t g, uint32_t b) {
 }
 
 void displayAnimation() {
+  // rotate tower backwards
+  rotationCounter++;
+  dispRotation = rotationCounter / 5;
+
   // propagate lower pixels to upper pixels
   // -> "fire" effect
   for(uint8_t x = 0; x < LEDSX; x++) {
@@ -133,11 +140,12 @@ void displayAnimation() {
   // then, calculate the new lowest row (fire shape for the future)
   uint8_t sigDiff = sMax - sMin;
   uint8_t bassThreshold;
+  uint8_t bass = sigDiff;
   if (signalEnvelope > 0) signalEnvelope--;
   //bassThreshold = max(32, (int)signalEnvelope - 5);
-  if (sigDiff > signalEnvelope) {
-    signalEnvelope = sigDiff;
-    bassThreshold = max(32, signalEnvelope);
+  if (bass > signalEnvelope) {
+    signalEnvelope = bass;
+    bassThreshold = max(45, signalEnvelope - 2);
   }
   
 
@@ -149,10 +157,17 @@ void displayAnimation() {
 
   for(uint8_t x = 0; x < LEDSX; x++) {
     uint16_t freqVal = max(0, (int32_t)sumFreq[x+1] - 30) * 8 / freqArea;;
-    uint32_t r, g, b; 
-    r = freqVal * sigDiff;
-    g = max(0, (int)sumFreq[3] - 20) * sigDiff / 64;
-    b = sigDiff >= bassThreshold ? 64 : 0;
+    uint32_t r, g, b;
+    if (bass >= bassThreshold)
+    {
+      b = 64;
+      r = g = 0;
+    } else {
+      b = 0;
+      r = freqVal * sigDiff;
+      g = max(0, (int)sumFreq[3] - 20) * sigDiff / 64;
+    }
+    
 
     uint32_t newCol = composeCol(r, g, b);
     setPixel(x, 0, newCol);
